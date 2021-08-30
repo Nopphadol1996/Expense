@@ -1,9 +1,72 @@
-#GUI Basic  2 EP3 Expense.py
+#GUI Basic Expense.py
 
 from tkinter import ttk,messagebox
 from tkinter import * # ttk is them of Tk
 from datetime import datetime
 import csv
+
+##################### DATABASE #########################
+import sqlite3
+
+#สร้าง database
+conn = sqlite3.connect('expanse.sqlite3')
+# สร้างตัวดำเนินการ (อยากได้อะไรใช้ตัวนี้ได้เลย)
+c = conn.cursor()
+
+'''
+ ['รหัสรายการ(transectionid) TEXT',
+ 'วัน-เวลา(Datetime)'TEXT,
+ 'รายการ(title)'TEXT,
+ 'ค่าใช้จ่าย(expense)'REAL (float),
+ 'จำนวน(quantity) INTERGER',
+ 'รวม(total)'REAL]
+ '''
+ ############### สร้าง Table ด้วยภาษา SQL ###############
+# expenselist คือชื่อ TABLE
+c.execute("""CREATE TABLE IF NOT EXISTS expenselist (
+				ID INTEGER PRIMARY KEY AUTOINCREMENT,
+				transectionid TEXT,
+				datetime TEXT,
+				title TEXT,
+				expense REAL,
+				quantity INTEGER,
+				total REAL
+			)""")
+def insert_expense(transectionid,datetime,title,expense,quantity,total): # เอาที่เราสร้างมาใส่
+	ID = None
+	with conn:
+		c.execute("""INSERT INTO expenselist VALUES (?,?,?,?,?,?,?)""", # ? ต้องรวม ID = None
+			(ID,transectionid,datetime,title,expense,quantity,total)) #ใส่ ID ไปด้วย
+		conn.commit() # คือ การบันทึกข้อมูลลงในฐานข้อมูล ถ้าไม่รันตัวนี้จะไม่บันทึก
+		# print('Insert Sucess...!')
+
+def show_expense():
+	with conn:
+		c.execute("SELECT *FROM expenselist")
+		expense = c.fetchall() # คำสั่งให้ดึงข้อมูลมา
+		# print(expense)
+	return expense # มี return  เพราะดึงข้อมูลมาทั้งหมด แล้วนำไปใช้งานต่อ
+
+
+def update_expense(transectionid,title,expense,quantity,total):
+	with conn:
+		########################## ต้องเหมิอนกับในdatabase ###############
+		c.execute("""UPDATE expenselist SET title=?, expense=?, quantity=?, total=? WHERE transectionid=?""",
+			([title,expense,quantity,total,transectionid]))
+		conn.commit()
+		# print('Data update')
+
+def delete_expense(transectionid):
+	with conn:
+		c.execute("DELETE FROM expenselist WHERE transectionid=?",([transectionid])) #ใส่เป็น list
+	conn.commit()
+	# print('Data Deleted')
+
+
+##################### DATABASE #########################
+
+
+
 
 GUI = Tk()
 
@@ -130,6 +193,12 @@ def Save(even=None):
 		dt = stamp.strftime('%Y-%m-%d %H:%M:%S')
 		transectionid = stamp.strftime('%Y%m%d%H%M%f') # สร้าง transection ID
 		dt = days[today] + '-' + dt # แล้วเอา dictionaryมาบวกกับ days[today] ที่ get จาก datetime มา กับ - บวก dt
+		
+		insert_expense(transectionid,dt,expense,float(price),int(quantity),total)
+		'''
+		################## อย่าลืมแปลงข้อมูลให้เหมือนกับในdatabase float(price)ในdatabase เป็นจุดทศนิยม แต่ตอนแรก
+		price เป็น str
+		'''
 		with open('savedata.csv','a',encoding='utf-8',newline='') as f:
 
 			# with คือ คำสั่งเปิดไฟล์แล้วปิดอัตโนมัติ
@@ -270,6 +339,17 @@ def updateCSV():
 		fw.writerows(data) # multiple line from nested list [[],[],[]] list ซ้อน list
 		print('Table was update ')
 
+def UpdateSQL():
+	data = list(alltransection.values())
+	#print('UPDATE SQL:',data[0]) # โชว์แค่ 1 record
+	for d in data:
+
+		# transectionid,title,expense,quantity,total
+		# d[0] = 202108300144088343,d[1]= จันทร์-2021-08-30 01:44:52,d[2]มะม่วง,d[3]=30,d[4]=2,d[5]60.0
+		####### เราต้องการเปลี่ยนแค่ d0,2,3,4,5
+		update_expense(d[0],d[2],d[3],d[4],d[5]) #ไปเรียก function update_expense มีจำนวน 6 ฟิว ใน database 
+
+
 def DeleteRecord(event=None): # สร้าง Function สำหรับ Delete ข้อมูล
 
 	check = messagebox.askyesno('Confirm','คุณต้องการลบข้อมูลหรือไม่ ?') # สร้าง pop up yes No เพื่อที่จะลบ แล้วใช้ if else กำหนดเงื่อนไข
@@ -287,15 +367,24 @@ def DeleteRecord(event=None): # สร้าง Function สำหรับ Dele
 			# print(type(transectionid))
 			del alltransection[str(transectionid)] # ลบข้อมูลที่อยู่ใน Dic Delete data ที่อยู่ใน dic ต้องแปลจาก Int > str
 			# print(alltransection)
-			updateCSV() # หลังจากการ ลบ ให้ Update CSV
+
+			######### ของ CSV #############
+
+			# updateCSV() # หลังจากการ ลบ ให้ Update CSV
+
+			######### ของ CSV #############
+
+			delete_expense(str(transectionid)) ### Delete in DB
+
 			update_table() # Update data ใหม่่ทั้งหมดอัพโนมัติ
 
 		else:
 
-			print('Cancel')
+			pass
+			# print('Cancel')
 	except:
 
-		print('กรุณาเลือกข้อมูลที่จะลบ')
+		#print('กรุณาเลือกข้อมูลที่จะลบ')
 		messagebox.showerror('ERROR','กรุณาเลือกข้อมูลที่จะลบ')
 
 BDelete = ttk.Button(T2,text='Delete',command=DeleteRecord) # สร้างปุ่มสำหรับ Delete ข้อมูล
@@ -311,12 +400,22 @@ def update_table():
 	#	resulttable.delete(c)
 	try:
 
-		data = read_csv()
+		data = show_expense()  # read_csv() เปลี่ยนไปใช้ database แทน csvs
+		#print('DATA',data)
 
 		for d in data:
+			################ csv ################
 			#resulttable.insert('',0,value=d) # บันทึกล่าสุดจะอยู่ด้านบน
-			resulttable.insert('','end',value=d) # บันทึกล่าสุดจะอยู่ด้านล่าง
-			alltransection[d[0]] = d # d[0] =  เก็บ transectionid เป็น Dic
+			#resulttable.insert('','end',value=d) # บันทึกล่าสุดจะอยู่ด้านล่าง เมื่อไปใช้ database แทน มันจะดึง indexมาด้วย เราต้องช้ามโดยการ[1:]
+			#alltransection[d[0]] = d # d[0] =  เก็บ transectionid เป็น Dic, เมื่อไปใช้ database แทน มันจะดึง indexมาด้วย เราต้องช้ามโดยการ[1:]
+			
+			################ csv ################
+			
+			####### ใช้ databasec แทน #########
+			alltransection[d[1]] = d[1:] # d[0] =  เก็บ transectionid เป็น Dic, เมื่อไปใช้ database แทน มันจะดึง indexมาด้วย เราต้องช้ามโดยการ[1:]
+			resulttable.insert('','end',value=d[1:]) # บันทึกล่าสุดจะอยู่ด้านล่าง เมื่อไปใช้ database แทน มันจะดึง indexมาด้วย เราต้องช้ามโดยการ[1:]
+			
+			####### ใช้ databasec แทน #########
 		#print(alltransection)
 	except Exception as e:
 		print('No File: ',e)
@@ -369,7 +468,7 @@ def EditRecord():
 		# print(transectionid)
 		# print(alltransection)
 		olddata = alltransection[str(transectionid)] ########## อย่าลืมแปลงเป็น str เพราะเวลา get ออกมาเป็นตัวเลข###########
-		print('OLD',olddata)
+		# print('OLD',olddata)
 		v1 = v_expense.get() #### กำหนดตัวแปร v1 เพื่อที่จะนำไปคำนวนใหม่
 		v2 = float(v_price.get()) #### กำหนดตัวแปร v2 เพื่อที่จะนำไปคำนวนใหม่
 		v3 = float(v_quantity.get()) #### กำหนดตัวแปร v3 เพื่อที่จะนำไปคำนวนใหม่
@@ -377,7 +476,11 @@ def EditRecord():
 		newdata = [olddata[0],olddata[1],v1,v2,v3,total] # ตำแหน่งที่ 0,1 เราไม่ต้องแก้ไข
 		########## อย่าลืมแปลงเป็น str เพราะเวลา get ออกมาเป็นตัวเลข###########
 		alltransection[str(transectionid)] = newdata # ให้ alltransection[transectionid] ให้มีค่า = newdata ใหม่ที่ทำการแก้ไขแล้ว
-		updateCSV()
+		
+		#### ของ csv ####
+		#updateCSV()
+		#### ของ csv ####
+		UpdateSQL()
 		update_table()
 		POPUP.destroy() ########### สั่งปิด POPUP ###################	
 
@@ -388,10 +491,10 @@ def EditRecord():
 	try:
 
 		select = resulttable.selection() # ไปเรียกฟังก์ชั่น พิเศษที่ คลิกใน Treeview
-		#print(select)
+		# print(select)
 		data = resulttable.item(select) # ดึง Item ที่เราเลือกมา จากตาราง (((ถ้าอยากได้มากว่า 1 รายการให้ Run for lop)))
 		data = data['values'] # ไปดึง values ออกมา ((dic))
-		#print(data)
+		# print(data)
 		transectionid = data[0] # ให้ transectionid = รหัสรายการคือ data[0]
 
 		############## ดึงข้อมูลเก่ามาใส่ใน ช่องกรอกที่เราจะแก้ไข ######################
@@ -428,6 +531,8 @@ def leftclick(event):
 
 resulttable.bind('<Button-1>',leftclick)
 '''
+
 update_table()
+#UpdateSQL()
 GUI.bind('<Tab>',lambda x:E2.focus())
 GUI.mainloop()
